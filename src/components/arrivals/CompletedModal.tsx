@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -6,9 +6,13 @@ import {
   Pressable,
   Modal,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Check } from "phosphor-react-native";
+import { router } from "expo-router";
+import { submitWorkerRating } from "@/service/api";
+import StarRatingInput from "@/components/common/StarRatingInput";
 
 type Props = {
   jobData: any;
@@ -23,44 +27,62 @@ export default function BookingSuccessModal({
   onClose,
   onViewDetails,
 }: Props) {
-  /* ---------------- SETTLEMENT CALCULATION ---------------- */
+  const [rating, setRating] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
 
-  const getSettlement = () => {
+  const settlement = useMemo(() => {
     if (!jobData) return null;
 
-    // Job completed
-    if (jobData.status === "IN_PROGRESS") {
+    if (jobData.status === "COMPLETED") {
       return {
-        label: "TOTAL AMOUNT",
-        amount: jobData.final_total,
-        description: "The service has been started sucessfully.",
+        label: "TOTAL PAID",
+        amount: jobData.final_total ?? jobData.estimated_total ?? 0,
+        description: "The service was completed successfully.",
       };
     }
 
-    // Cancelled after inspection
     if (
       jobData.status === "CANCELLED_BY_USER" &&
       jobData.inspection_at !== null
     ) {
       return {
-        label: "VISIT FEES",
-        amount: jobData.visit_fee,
+        label: "VISIT FEE",
+        amount: jobData.visit_fee ?? 0,
         description:
-          "The job was cancelled after inspection. A visit fee was applied.",
+          "The booking was cancelled after inspection, so a visit fee was applied.",
       };
     }
 
-    // Cancelled before inspection
     return {
       label: "NO CHARGES",
       amount: 0,
-      description: "The booking was cancelled before inspection.",
+      description: "The booking ended before any payable work began.",
     };
+  }, [jobData]);
+
+  const canRateWorker = jobData?.status === "COMPLETED" && !!jobData?.worker_id;
+
+  const handleSubmitRating = async () => {
+    if (!jobData?.id || rating < 1) {
+      Alert.alert("Add a rating", "Please choose at least one star.");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await submitWorkerRating(jobData.id, rating);
+      setHasSubmitted(true);
+      Alert.alert("Thanks", "Your rating has been saved.");
+    } catch (error: any) {
+      Alert.alert(
+        "Rating failed",
+        error?.response?.data?.message || "Please try again in a moment.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
-
-  const settlement = getSettlement();
-
-  /* ---------------- RENDER ---------------- */
 
   return (
     <Modal
@@ -75,7 +97,6 @@ export default function BookingSuccessModal({
           </View>
         ) : (
           <>
-            {/* CENTER CONTENT */}
             <View style={styles.content}>
               <Text style={styles.title}>Booking Finished</Text>
 
@@ -90,21 +111,70 @@ export default function BookingSuccessModal({
 
               <View style={styles.card}>
                 <Text style={styles.cardLabel}>{settlement.label}</Text>
-                <Text style={styles.cardAmount}>₹{settlement.amount}</Text>
+                <Text style={styles.cardAmount}>Rs {settlement.amount}</Text>
               </View>
+
+              {canRateWorker && (
+                <View style={styles.ratingCard}>
+                  <Text style={styles.ratingTitle}>
+                    {hasSubmitted ? "Rating Submitted" : "Rate Your Worker"}
+                  </Text>
+                  <Text style={styles.ratingSubtitle}>
+                    Your feedback helps us improve future bookings.
+                  </Text>
+                  <StarRatingInput
+                    value={rating}
+                    onChange={setRating}
+                    size={34}
+                  />
+                  {!hasSubmitted && (
+                    <Pressable
+                      style={[
+                        styles.inlineButton,
+                        (submitting || rating < 1) && styles.inlineButtonDisabled,
+                      ]}
+                      onPress={handleSubmitRating}
+                      disabled={submitting || rating < 1}
+                    >
+                      <Text style={styles.inlineButtonText}>
+                        {submitting ? "Saving..." : "Submit Rating"}
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
+              )}
             </View>
 
-            {/* BOTTOM ACTIONS */}
             <View style={styles.bottom}>
+              {jobData?.worker_id && (
+                <Pressable
+                  style={styles.secondaryBtn}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/(app)/(screens)/worker-profile",
+                      params: {
+                        workerId: jobData.worker_id,
+                        jobId: jobData.id,
+                        workerName: jobData.worker_name,
+                        workerPhone: jobData.worker_phone,
+                        workerType: jobData.type,
+                      },
+                    })
+                  }
+                >
+                  <Text style={styles.secondaryText}>VIEW WORKER</Text>
+                </Pressable>
+              )}
+
               <Pressable style={styles.primaryBtn} onPress={onClose}>
                 <Text style={styles.primaryText}>GO TO DASHBOARD</Text>
               </Pressable>
 
               <Pressable
-                style={styles.secondaryBtn}
+                style={styles.ghostBtn}
                 onPress={() => onViewDetails?.(jobData)}
               >
-                <Text style={styles.secondaryText}>VIEW DETAILS</Text>
+                <Text style={styles.ghostText}>VIEW DETAILS</Text>
               </Pressable>
             </View>
           </>
@@ -114,36 +184,27 @@ export default function BookingSuccessModal({
   );
 }
 
-/* ---------------- STYLES ---------------- */
-
 const PRIMARY = "#a1e633";
 const DARK = "#161b0e";
 const BG = "#fcfdfa";
 const BORDER = "#e2e8d8";
 
 const styles = StyleSheet.create({
-  /* Screen */
   overlay: {
     flex: 1,
     backgroundColor: BG,
   },
-
-  /* Loader */
   loader: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
-
-  /* Center content */
   content: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 28,
+    paddingHorizontal: 24,
   },
-
-  /* Title */
   title: {
     fontSize: 30,
     fontWeight: "800",
@@ -151,14 +212,11 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 24,
   },
-
-  /* Icon */
   iconWrapper: {
     marginBottom: 26,
     justifyContent: "center",
     alignItems: "center",
   },
-
   iconGlow: {
     position: "absolute",
     width: 150,
@@ -166,7 +224,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(161,230,51,0.18)",
     borderRadius: 999,
   },
-
   iconCircle: {
     width: 110,
     height: 110,
@@ -176,8 +233,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     elevation: 10,
   },
-
-  /* Description */
   description: {
     fontSize: 16,
     color: "rgba(22,27,14,0.65)",
@@ -186,8 +241,6 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     maxWidth: 300,
   },
-
-  /* Amount card */
   card: {
     width: "100%",
     backgroundColor: "#ffffff",
@@ -198,7 +251,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 8,
   },
-
   cardLabel: {
     fontSize: 12,
     fontWeight: "800",
@@ -206,37 +258,80 @@ const styles = StyleSheet.create({
     color: "rgba(22,27,14,0.45)",
     marginBottom: 8,
   },
-
   cardAmount: {
     fontSize: 32,
     fontWeight: "900",
     color: DARK,
   },
-
-  /* Bottom buttons */
+  ratingCard: {
+    width: "100%",
+    marginTop: 18,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 18,
+    padding: 20,
+    gap: 12,
+  },
+  ratingTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: DARK,
+    textAlign: "center",
+  },
+  ratingSubtitle: {
+    textAlign: "center",
+    color: "#64748b",
+    lineHeight: 20,
+  },
+  inlineButton: {
+    marginTop: 8,
+    backgroundColor: "#111827",
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: "center",
+  },
+  inlineButtonDisabled: {
+    opacity: 0.5,
+  },
+  inlineButtonText: {
+    color: "#fff",
+    fontWeight: "800",
+  },
   bottom: {
     paddingHorizontal: 24,
     paddingBottom: 20,
     paddingTop: 10,
+    gap: 12,
     backgroundColor: BG,
   },
-
   primaryBtn: {
     width: "100%",
     backgroundColor: "#000",
     paddingVertical: 18,
     borderRadius: 20,
     alignItems: "center",
-    marginBottom: 12,
   },
-
   primaryText: {
     fontSize: 17,
     fontWeight: "900",
     color: "#fff",
   },
-
   secondaryBtn: {
+    width: "100%",
+    borderWidth: 1.5,
+    borderColor: "#cae58c",
+    backgroundColor: "#f7fce8",
+    paddingVertical: 18,
+    borderRadius: 20,
+    alignItems: "center",
+  },
+  secondaryText: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: DARK,
+  },
+  ghostBtn: {
     width: "100%",
     borderWidth: 1.5,
     borderColor: BORDER,
@@ -244,8 +339,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: "center",
   },
-
-  secondaryText: {
+  ghostText: {
     fontSize: 17,
     fontWeight: "800",
     color: DARK,

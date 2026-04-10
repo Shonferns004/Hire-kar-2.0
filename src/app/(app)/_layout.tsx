@@ -5,8 +5,11 @@ import { View, StyleSheet, StatusBar } from "react-native";
 import { supabase } from "@/config/supabase";
 import AppSplash from "@/components/SplashScreen";
 import { useJobStore } from "@/store/jobStore";
-import { scheduleRandomNotification } from "@/service/notification";
+import {
+  scheduleRandomEngagementNotification,
+} from "@/service/notification";
 import { useUserStore } from "@/store/userStore";
+import { Colors } from "@/utils/Constants";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -38,8 +41,7 @@ export default function AppLayout() {
       // run user dependent services
       if (session) {
         initRealtime();
-
-        scheduleRandomNotification();
+        scheduleRandomEngagementNotification();
 
         router.replace("/(app)/(tabs)");
       } else {
@@ -63,6 +65,7 @@ export default function AppLayout() {
 
       if (session) {
         initRealtime();
+        scheduleRandomEngagementNotification();
 
         router.replace("/(app)/(tabs)");
       } else {
@@ -79,7 +82,11 @@ export default function AppLayout() {
 
   return (
     <View style={{ flex: 1 }}>
-      <StatusBar backgroundColor="#ccc" barStyle="dark-content" />
+      <StatusBar
+        translucent={false}
+        backgroundColor={Colors.theme}
+        barStyle="light-content"
+      />
 
       {/* Navigation tree must exist always */}
       <Stack screenOptions={{ headerShown: false }}>

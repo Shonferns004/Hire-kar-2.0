@@ -1,50 +1,79 @@
-import { View, Text, ActivityIndicator, Alert, StyleSheet } from "react-native";
-import React, {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-} from "react";
+import { View, ActivityIndicator, StyleSheet } from "react-native";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { screenHeight } from "@/utils/Constants";
 import { rideStyles } from "@/styles/rideStyles";
 import LiveTracking from "@/components/book/LiveTracking";
 import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
-import { supabase } from "@/config/supabase";
+import { ensureRealtime, supabase } from "@/config/supabase";
 import LiveBottomSheet from "@/components/book/LiveSheet";
 
-const androidHeight = [screenHeight * 0.5, screenHeight * 0.3];
+const FINAL_STATUSES = [
+  "COMPLETED",
+  "CANCELLED_BY_USER",
+  "CANCELLED_BY_WORKER",
+  "AUTO_CANCELLED",
+  "EXPIRED",
+];
 
 const LiveRideScreen = () => {
   const [jobData, setJobData] = useState<any>(null);
   const [jobCoords, setJobCoords] = useState<any>(null);
   const { id } = useLocalSearchParams();
-  const bottomSheetRef = useRef(null);
-  const snapPoints = useMemo(() => ["35%", "35%"], []);
   const router = useRouter();
-  const [mapHeight, setMapHeight] = useState(snapPoints[0]);
-  const [loading, setLoading] = useState(true);
+  const bottomSheetRef = useRef(null);
   const handledFinalState = useRef(false);
-
-  const handleSheetChanges = useCallback((index: number) => {
-    let height = screenHeight * 0.8;
-    if (index == 1) {
-      height = screenHeight * 0.5;
+  const [loading, setLoading] = useState(true);
+  const jobId = Array.isArray(id) ? id[0] : id;
+  const snapPoints = useMemo(() => {
+    if (jobData?.status === "ASSIGNED") {
+      return ["34%", "54%", "78%"];
     }
-    setMapHeight(height as any);
-  }, []);
+
+    if (jobData?.status === "SCHEDULED") {
+      return ["30%", "46%", "68%"];
+    }
+
+    return ["52%", "52%", "52%"];
+  }, [jobData?.status]);
+
+  const hydrateJob = useCallback(
+    (job: any) => {
+      if (!job) return;
+
+      if (job.status === "ARRIVED" || FINAL_STATUSES.includes(job.status)) {
+        router.replace({
+          pathname: "/waiting",
+          params: { id: job.id },
+        });
+        return;
+      }
+
+      setJobData((prev: any) => ({
+        ...prev,
+        ...job,
+      }));
+
+      if (
+        typeof job.worker_lat === "number" &&
+        typeof job.worker_lng === "number"
+      ) {
+        setJobCoords({
+          latitude: Number(job.worker_lat),
+          longitude: Number(job.worker_lng),
+        });
+      }
+    },
+    [router],
+  );
 
   useEffect(() => {
-    if (!id) return;
+    if (!jobId) return;
 
     const fetchJob = async () => {
       const { data, error } = await supabase
         .from("jobs")
         .select("*")
-        .eq("id", id)
+        .eq("id", jobId)
         .single();
 
       if (!data || error) {
@@ -53,71 +82,59 @@ const LiveRideScreen = () => {
         return;
       }
 
-      setJobData(data);
-
-      if (
-        typeof data.worker_lat === "number" &&
-        typeof data.worker_lng === "number"
-      ) {
-        setJobCoords({
-          latitude: data.worker_lat,
-          longitude: data.worker_lng,
-        });
-      }
-
+      hydrateJob(data);
       setLoading(false);
     };
 
     fetchJob();
-  }, [id]);
+  }, [hydrateJob, jobId, router]);
 
   useEffect(() => {
-    if (!id) return;
+    if (!jobId) return;
 
-    const channel = supabase
-      .channel(`job-${id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "jobs",
-          filter: `id=eq.${id}`,
-        },
-        (payload) => {
-          if (!payload.new) return;
-          const job = payload.new as any;
-          setJobData(job);
+    let active = true;
+    let channel: any = null;
 
-          if (!handledFinalState.current) {
-            if (job.status === "COMPLETED") {
-              handledFinalState.current = true;
-              Alert.alert("Job Completed");
-              router.replace("/(app)/(tabs)");
-            }
+    const subscribeToJob = async () => {
+      await ensureRealtime();
+      if (!active) return;
 
-            if (job.status === "EXPIRED" || job.status === "CANCELLED") {
-              handledFinalState.current = true;
-              Alert.alert("Job ended");
-              router.replace("/(app)/(tabs)");
-            }
-          }
-
-          if (job.worker_lat && job.worker_lng) {
-            setJobCoords({
-              latitude: job.worker_lat,
-              longitude: job.worker_lng,
-            });
-          }
-        },
-      )
-      .subscribe();
-
-    // ✅ CLEANUP (synchronous wrapper)
-    return () => {
-      supabase.removeChannel(channel);
+      channel = supabase
+        .channel(`job-${jobId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "jobs",
+            filter: `id=eq.${jobId}`,
+          },
+          (payload) => hydrateJob(payload.new),
+        )
+        .subscribe();
     };
-  }, [id]);
+
+    subscribeToJob();
+
+    return () => {
+      active = false;
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [hydrateJob, jobId]);
+
+  useEffect(() => {
+    if (!jobData || handledFinalState.current) return;
+
+    if (jobData.status === "ARRIVED") {
+      handledFinalState.current = true;
+      router.replace({
+        pathname: "/waiting",
+        params: { id: jobData.id },
+      });
+    }
+  }, [jobData, router]);
 
   if (loading) {
     return (
@@ -138,16 +155,21 @@ const LiveRideScreen = () => {
       )}
 
       <BottomSheet
-        onChange={handleSheetChanges}
         ref={bottomSheetRef}
         index={0}
-        snapPoints={jobData.status === "ASSIGNED" ? ["40%", "40%"] : snapPoints}
+        snapPoints={snapPoints}
         enableDynamicSizing={false}
         enableOverDrag={false}
+        enablePanDownToClose={false}
         handleIndicatorStyle={{ backgroundColor: "#e2e8f0" }}
         backgroundStyle={styles.sheetBackground}
       >
-        <BottomSheetScrollView style={styles.sheetContent}>
+        <BottomSheetScrollView
+          style={styles.sheetContent}
+          contentContainerStyle={styles.sheetContentContainer}
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled
+        >
           <LiveBottomSheet item={jobData} />
         </BottomSheetScrollView>
       </BottomSheet>
@@ -165,6 +187,8 @@ const styles = StyleSheet.create({
   },
   sheetContent: {
     paddingHorizontal: 12,
+  },
+  sheetContentContainer: {
     paddingBottom: 120,
   },
 });

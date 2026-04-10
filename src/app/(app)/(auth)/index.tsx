@@ -20,7 +20,6 @@ export default function PhoneAuthScreen() {
 
   const otpRefs = Array.from({ length: 6 }, () => useRef<TextInput>(null));
 
-
   /* ================= SEND OTP ================= */
   const sendOtp = async () => {
     if (phone.length !== 10) {
@@ -46,97 +45,90 @@ export default function PhoneAuthScreen() {
 
   /* ================= VERIFY OTP ================= */
   const verifyOtp = async () => {
-  const token = otp.join("");
+    const token = otp.join("");
 
-  if (token.length !== 6) {
-    Alert.alert("Invalid OTP", "Enter the 6-digit OTP");
-    return;
-  }
+    if (token.length !== 6) {
+      Alert.alert("Invalid OTP", "Enter the 6-digit OTP");
+      return;
+    }
 
-  setLoading(true);
+    setLoading(true);
 
-  const { data, error } = await supabase.auth.verifyOtp({
-    phone: `+91${phone}`,
-    token,
-    type: "sms",
-  });
+    const { data, error } = await supabase.auth.verifyOtp({
+      phone: `+91${phone}`,
+      token,
+      type: "sms",
+    });
 
-  if (error) {
-    setLoading(false);
-    Alert.alert("OTP Failed", error.message);
-    return;
-  }
+    if (error) {
+      setLoading(false);
+      Alert.alert("OTP Failed", error.message);
+      return;
+    }
 
-  const session = data?.session;
-  const user = data?.user;
+    const session = data?.session;
+    const user = data?.user;
 
-  if (!session || !user) {
-    setLoading(false);
-    Alert.alert("Auth Error", "No session created");
-    return;
-  }
+    if (!session || !user) {
+      setLoading(false);
+      Alert.alert("Auth Error", "No session created");
+      return;
+    }
 
-  try {
-    // 🔴 THE MOST IMPORTANT STEP (missing in your app)
-    // Create or sync application profile using AUTH ID
-    const { error: upsertError } = await supabase
-      .from("users")
-      .upsert(
+    try {
+      // 🔴 THE MOST IMPORTANT STEP (missing in your app)
+      // Create or sync application profile using AUTH ID
+      const { error: upsertError } = await supabase.from("users").upsert(
         {
-          id: user.id,              // <-- Supabase identity
-          phone: user.phone,        // store phone for UI/admin
+          id: user.id, // <-- Supabase identity
+          phone: user.phone, // store phone for UI/admin
         },
-        { onConflict: "id" }        // ensures no duplicates
+        { onConflict: "id" }, // ensures no duplicates
       );
 
-    if (upsertError) {
-      throw upsertError;
+      if (upsertError) {
+        throw upsertError;
+      }
+
+      // Fetch profile status
+      const { data: profile, error: profileError } = await supabase
+        .from("users")
+        .select("status")
+        .eq("id", user.id)
+        .single();
+
+      if (profileError || !profile) {
+        throw new Error("Profile creation failed");
+      }
+
+      setLoading(false);
+
+      // Route based on status
+      switch (profile.status) {
+        case "pending-1":
+          router.replace({
+            pathname: "/(app)/(auth)/pending",
+            params: { phone },
+          });
+          break;
+
+        case "pending-2":
+          router.replace("/(app)/(tabs)");
+          break;
+
+        case "Success":
+          Alert.alert("Blocked", "Please contact admin");
+          await supabase.auth.signOut();
+          break;
+
+        default:
+          Alert.alert("Error", "Invalid account state");
+      }
+    } catch (e: any) {
+      setLoading(false);
+      Alert.alert("Setup Error", e.message);
     }
-
-    
-
-    // Fetch profile status
-    const { data: profile, error: profileError } = await supabase
-      .from("users")
-      .select("status")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError || !profile) {
-      throw new Error("Profile creation failed");
-    }
-
-    setLoading(false);
-
-    // Route based on status
-    switch (profile.status) {
-      case "pending-1":
-        router.replace({
-          pathname: "/(app)/(auth)/pending",
-          params: { phone },
-        });
-        break;
-
-      case "pending-2":
-        router.replace("/(app)/(tabs)");
-        break;
-
-      case "Success":
-        Alert.alert("Blocked", "Please contact admin");
-        await supabase.auth.signOut();
-        break;
-
-      default:
-        Alert.alert("Error", "Invalid account state");
-    }
-
-    
-  } catch (e: any) {
-    setLoading(false);
-    Alert.alert("Setup Error", e.message);
-  }
-};
-
+  };
 
   /* ================= OTP HANDLER ================= */
   const handleOtpChange = (value: string, index: number) => {

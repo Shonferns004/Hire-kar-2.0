@@ -1,5 +1,12 @@
 import { View, Image } from "react-native";
-import React, { FC, useEffect, useRef, useState, useCallback, memo } from "react";
+import React, {
+  FC,
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+  memo,
+} from "react";
 import Mapbox, { MarkerView } from "@rnmapbox/maps";
 import { indiaIntialRegion } from "@/utils/CustomMap";
 import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
@@ -11,8 +18,6 @@ import { MAP_URL, MAPBOX_TOKEN } from "@/config/constants";
 const height = Dimensions.get("window").height;
 const CAMERA_OFFSET = height * 0.45;
 
-;
-
 Mapbox.setAccessToken(MAPBOX_TOKEN);
 
 const LiveTracking: FC<{
@@ -20,6 +25,10 @@ const LiveTracking: FC<{
   worker: any;
   status: string;
 }> = ({ destination, worker, status }) => {
+  console.log("📍 LiveTracking props:");
+  console.log("DESTINATION:", destination);
+  console.log("WORKER:", worker);
+  console.log("STATUS:", status);
   const mapRef = useRef<Mapbox.MapView>(null);
   const cameraRef = useRef<Mapbox.Camera>(null);
 
@@ -35,7 +44,10 @@ const LiveTracking: FC<{
   const prevLocation = useRef<any>(null);
   const [eta, setEta] = useState<number | null>(null);
 
-  const toCoord = (p: any) => [p.longitude, p.latitude];
+  const toCoord = (p: any) =>
+    p?.longitude !== undefined && p?.latitude !== undefined
+      ? [p.longitude, p.latitude]
+      : null;
 
   /* ---------------- ROUTE FETCH ---------------- */
 
@@ -43,7 +55,7 @@ const LiveTracking: FC<{
     if (!destination?.latitude || !worker?.latitude) return;
 
     const now = Date.now();
-    if (now - lastFetchRef.current < 15000) return; // throttle 15s
+    if (now - lastFetchRef.current < 5000) return; // throttle 15s
     lastFetchRef.current = now;
 
     try {
@@ -65,6 +77,12 @@ const LiveTracking: FC<{
       const roadStart = coords[0];
       const roadEnd = coords[coords.length - 1];
       const destinationActual = [destination.longitude, destination.latitude];
+
+      console.log("🛣 Fetching route between:");
+      console.log("Worker:", worker);
+      console.log("Destination:", destination);
+
+      console.log("MAPBOX ROUTE:", json);
 
       // Main road route
       setRouteGeoJSON({
@@ -92,41 +110,46 @@ const LiveTracking: FC<{
     } catch (e) {
       console.log("Route fetch error:", e);
     }
-  }, [destination?.latitude, worker?.latitude]);
+  }, [destination?.latitude, worker?.latitude, worker?.longitude]);
 
+  const workerIcon =
+    worker?.type === "electrician"
+      ? require("@/assets/icons/electrician.png")
+      : require("@/assets/icons/plumber.png");
 
   useEffect(() => {
-  if (!worker?.latitude) return;
+    if (!worker?.latitude) return;
 
-  const now = Date.now();
+    const now = Date.now();
 
-  if (prevLocation.current) {
-    const speed = calculateSpeedKmH(
-      prevLocation.current,
-      { lat: worker.latitude, lng: worker.longitude, time: now }
-    );
+    if (prevLocation.current) {
+      const speed = calculateSpeedKmH(prevLocation.current, {
+        lat: worker.latitude,
+        lng: worker.longitude,
+        time: now,
+      });
 
-    const distance = calculateDistance(
-      destination.latitude,
-      destination.longitude,
-      worker.latitude,
-      worker.longitude
-    );
+      const distance = calculateDistance(
+        destination.latitude,
+        destination.longitude,
+        worker.latitude,
+        worker.longitude,
+      );
 
-    const etaMin = calculateLiveETA(distance, speed);
-    setEta(etaMin);
-  }
+      const etaMin = calculateLiveETA(distance, speed);
+      setEta(etaMin);
+    }
 
-  prevLocation.current = {
-    lat: worker.latitude,
-    lng: worker.longitude,
-    time: now,
-  };
-}, [worker?.latitude, worker?.longitude]);
+    prevLocation.current = {
+      lat: worker.latitude,
+      lng: worker.longitude,
+      time: now,
+    };
+  }, [worker?.latitude, worker?.longitude]);
 
   /* Fetch route when worker moves */
   useEffect(() => {
-    if (["ASSIGNED", "ARRIVED", "IN_PROGRESS"].includes(status)) {
+    if (destination?.latitude && worker?.latitude) {
       fetchRoute();
     }
   }, [worker?.latitude, worker?.longitude, status]);
@@ -149,6 +172,10 @@ const LiveTracking: FC<{
     ];
 
     cameraRef.current.fitBounds(ne, sw, 80, 800);
+
+    console.log("📷 Fitting camera to markers");
+    console.log("Worker:", worker);
+    console.log("Destination:", destination);
   };
 
   useEffect(() => {
@@ -193,20 +220,16 @@ const LiveTracking: FC<{
 
         {/* Destination marker */}
         {destination?.latitude && (
-          <MarkerView coordinate={toCoord(destination)}>
+          <MarkerView coordinate={toCoord(destination) as any}>
             <FontAwesome5 name="map-pin" size={20} color="red" />
           </MarkerView>
         )}
 
         {/* Worker marker */}
-        {worker?.latitude && (
-          <MarkerView coordinate={toCoord(worker)}>
+        {worker?.latitude !== undefined && worker?.longitude !== undefined && (
+          <MarkerView coordinate={toCoord(worker) as any}>
             <Image
-              source={
-                worker.type === "electrician"
-                  ? require("@/assets/icons/electrician.png")
-                  : require("@/assets/icons/plumber.png")
-              }
+              source={workerIcon}
               style={{
                 width: 32,
                 height: 32,

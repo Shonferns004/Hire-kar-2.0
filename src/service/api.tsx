@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { BASE_URL } from '@/config/constants';
-import { getUserId, getUserPhone, supabase } from '@/config/supabase';
+import { getUserId, supabase } from '@/config/supabase';
 
 
 export const api = axios.create({
@@ -60,6 +60,10 @@ export const bookJob = async (payload: {
   estimatedTotal: number;
   minPrice: number;
   maxPrice: number;
+  bookingType?: "instant" | "scheduled";
+  scheduledFor?: string;
+  scheduledDate?: string;
+  scheduledTime?: string;
 }) => {
   try {
     const res = await api.post("/jobs", payload);
@@ -96,6 +100,36 @@ export const getJobDetails = async () => {
   }
 };
 
+export const getWorkerProfile = async (workerId: string) => {
+  try {
+    const res = await api.get(`/workers/${workerId}/profile`);
+    return res.data.worker;
+  } catch (err: any) {
+    console.log("GET WORKER PROFILE ERROR:", err?.response?.data || err.message);
+    throw err;
+  }
+};
+
+export const getWorkerRatings = async (workerId: string) => {
+  try {
+    const res = await api.get(`/workers/${workerId}/ratings`);
+    return res.data;
+  } catch (err: any) {
+    console.log("GET WORKER RATINGS ERROR:", err?.response?.data || err.message);
+    return { ratings: [], ratings_count: 0 };
+  }
+};
+
+export const getTopWorkers = async (limit: number = 6) => {
+  try {
+    const res = await api.get("/workers/top", { params: { limit } });
+    return res.data;
+  } catch (err: any) {
+    console.log("GET TOP WORKERS ERROR:", err?.response?.data || err.message);
+    return { workers: [] };
+  }
+};
+
 export const cancelJob = async (
   jobId: string,
   reason: string = "CANCELLED_BY_USER",
@@ -116,6 +150,16 @@ export const verifyPrice = async (jobId: string) => {
   } catch (err) {
     console.log("Verify price failed", err);
     return false;
+  }
+};
+
+export const submitWorkerRating = async (jobId: string, rating: number) => {
+  try {
+    const res = await api.post(`/jobs/${jobId}/rate`, { rating });
+    return res.data;
+  } catch (err: any) {
+    console.log("RATE WORKER ERROR:", err?.response?.data || err.message);
+    throw err;
   }
 };
 

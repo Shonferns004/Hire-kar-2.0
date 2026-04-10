@@ -1,6 +1,7 @@
 import { normalizePhone } from '@/lib/normalize'
 import { createClient } from '@supabase/supabase-js'
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AppState } from "react-native";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './constants';
 
 
@@ -16,13 +17,20 @@ export const supabase = createClient(
     },
   }
 )
+supabase.auth.onAuthStateChange((_event, session) => {
+  if (session?.access_token) {
+    supabase.realtime.setAuth(session.access_token);
+  }
+});
 
-
+AppState.addEventListener("change", (state) => {
+  if (state === "active") {
+    supabase.realtime.connect();
+  }
+});
+ 
 export const getUserPhone = async (): Promise<string> => {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
+  const { data: { session }, error } = await supabase.auth.getSession();
 
   if (error || !session?.user?.phone) {
     throw new Error("Phone number not found in Supabase session");

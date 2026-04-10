@@ -1,5 +1,8 @@
 import { supabase } from "@/config/supabase";
+import { notifyAssignment } from "@/service/notification";
 import { create } from "zustand";
+
+const assignmentNotifiedJobs = new Set<string>();
 
 type Job = {
   id: string;
@@ -21,15 +24,20 @@ export const useJobStore = create<JobState>((set, get) => ({
   channel: null,
 
   setJobs: (jobs) => {
-    // 🔒 Always deduplicate when setting initial jobs
     const uniqueJobs = Array.from(
-      new Map(jobs.map(job => [job.id, job])).values()
+      new Map(jobs.map((job) => [job.id, job])).values(),
     );
+
+    uniqueJobs.forEach((job) => {
+      if (job.status === "ASSIGNED") {
+        assignmentNotifiedJobs.add(job.id);
+      }
+    });
+
     set({ jobs: uniqueJobs });
   },
 
   initRealtime: () => {
-    // 🛑 Prevent multiple subscriptions
     if (get().channel) return;
 
     const channel = supabase
@@ -48,31 +56,46 @@ export const useJobStore = create<JobState>((set, get) => ({
             set({
               jobs: [
                 payload.new,
-                ...currentJobs.filter(
-                  job => job.id !== payload.new.id
-                ),
+                ...currentJobs.filter((job) => job.id !== payload.new.id),
               ],
             });
           }
 
           if (payload.eventType === "UPDATE") {
+            const previousJob = currentJobs.find(
+              (job) => job.id === payload.new.id,
+            );
+            const alreadyNotified = assignmentNotifiedJobs.has(payload.new.id);
+
+            if (
+              payload.new?.status === "ASSIGNED" &&
+              previousJob?.status !== "ASSIGNED" &&
+              !alreadyNotified
+            ) {
+              assignmentNotifiedJobs.add(payload.new.id);
+              notifyAssignment(payload.new);
+            }
+
+            if (payload.new?.status !== "ASSIGNED") {
+              assignmentNotifiedJobs.delete(payload.new.id);
+            }
+
             set({
-              jobs: currentJobs.map(job =>
-                job.id === payload.new.id
-                  ? payload.new
-                  : job
-              ),
+              jobs: previousJob
+                ? currentJobs.map((job) =>
+                    job.id === payload.new.id ? payload.new : job,
+                  )
+                : [payload.new, ...currentJobs],
             });
           }
 
           if (payload.eventType === "DELETE") {
+            assignmentNotifiedJobs.delete(payload.old.id);
             set({
-              jobs: currentJobs.filter(
-                job => job.id !== payload.old.id
-              ),
+              jobs: currentJobs.filter((job) => job.id !== payload.old.id),
             });
           }
-        }
+        },
       )
       .subscribe((status: any) => {
         console.log("Realtime status:", status);

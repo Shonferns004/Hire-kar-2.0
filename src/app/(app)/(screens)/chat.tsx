@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Image,
   TextInput,
   TouchableOpacity,
   ScrollView,
@@ -32,6 +31,8 @@ export default function Chat() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<any[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
 
   const [userId, setUserId] = useState<string | null>(null);
 
@@ -170,11 +171,13 @@ export default function Chat() {
   /* ---------------- SEND MESSAGE ---------------- */
 
   const sendMessage = async () => {
-    if (!message.trim() || !conversationId) return;
+    if (!message.trim() || !conversationId || sending) return;
 
     const text = message;
+    setChatError(null);
 
     setMessage("");
+    setSending(true);
 
     const tempId = `temp-${Date.now()}`;
 
@@ -193,11 +196,21 @@ export default function Chat() {
       animated: true,
     });
 
-    await api.post("/ai/support", {
-      conversationId,
-      userId,
-      message: text,
-    });
+    try {
+      await api.post("/ai/support", {
+        conversationId,
+        userId,
+        message: text,
+      });
+    } catch (error) {
+      setMessages((prev) =>
+        prev.filter((item) => item.id !== tempId),
+      );
+      setMessage(text);
+      setChatError("Message failed to send. Please try again.");
+    } finally {
+      setSending(false);
+    }
   };
 
   /* ---------------- CLEAR CHAT ---------------- */
@@ -206,9 +219,9 @@ export default function Chat() {
     if (!conversationId) return;
 
     await supabase
-      .from("support_conversations")
+      .from("support_messages")
       .delete()
-      .eq("id", conversationId);
+      .eq("conversation_id", conversationId);
 
     setMessages([]);
     setMenuVisible(false);
@@ -236,12 +249,9 @@ export default function Chat() {
 
             <View style={styles.headerCenter}>
               <View style={styles.avatarWrapper}>
-                <Image
-                  source={{
-                    uri: "https://i.pravatar.cc/150",
-                  }}
-                  style={styles.avatar}
-                />
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>HK</Text>
+                </View>
 
                 <View style={styles.onlineDot} />
               </View>
@@ -274,15 +284,14 @@ export default function Chat() {
             <Text style={styles.dayText}>Today</Text>
           </View>
 
-          {messages.map((msg, index) =>
+          {messages.map((msg) =>
             msg.sender === "user" ? (
               <UserBubble key={msg.id} text={msg.message} />
-            ) : index === messages.length - 1 ? (
-              <TypingBubble key={msg.id} text={msg.message} />
             ) : (
               <AgentBubble key={msg.id} text={msg.message} />
             ),
           )}
+          {sending && <TypingBubble text="Support is replying..." />}
         </ScrollView>
 
         {/* MENU */}
@@ -316,17 +325,24 @@ export default function Chat() {
               style={styles.input}
             />
 
-            <TouchableOpacity style={styles.send} onPress={sendMessage}>
-              <PaperPlaneTilt size={20} weight="bold" color="#a1e633" />
+            <TouchableOpacity
+              style={[styles.send, sending && styles.sendDisabled]}
+              onPress={sendMessage}
+              disabled={sending}
+            >
+              <PaperPlaneTilt
+                size={20}
+                weight="bold"
+                color={sending ? "#94a3b8" : "#a1e633"}
+              />
             </TouchableOpacity>
           </View>
         </View>
+        {chatError ? <Text style={styles.errorText}>{chatError}</Text> : null}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
-
-/* ---------- TYPING EFFECT ---------- */
 
 const TypingBubble = ({ text }: any) => {
   const [displayed, setDisplayed] = useState("");
@@ -368,13 +384,15 @@ const UserBubble = ({ text }: any) => (
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fcfdfa",
+    backgroundColor: "#f7faf7",
   },
 
   header: {
-    padding: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderColor: "#e2e8d8",
+    borderColor: "#dde7d5",
+    backgroundColor: "#ffffff",
   },
 
   headerRow: {
@@ -399,9 +417,16 @@ const styles = StyleSheet.create({
   },
 
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#d9f99d",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: {
+    color: "#365314",
+    fontWeight: "900",
   },
 
   onlineDot: {
@@ -415,7 +440,8 @@ const styles = StyleSheet.create({
   },
 
   name: {
-    fontWeight: "700",
+    fontWeight: "800",
+    color: "#0f172a",
   },
 
   online: {
@@ -425,7 +451,8 @@ const styles = StyleSheet.create({
   },
 
   messages: {
-    padding: 40,
+    paddingHorizontal: 18,
+    paddingVertical: 24,
     gap: 14,
   },
 
@@ -443,10 +470,12 @@ const styles = StyleSheet.create({
   },
 
   agentBubble: {
-    backgroundColor: "#f1f3f0",
-    padding: 12,
-    borderRadius: 18,
-    borderBottomLeftRadius: 4,
+    backgroundColor: "#ffffff",
+    padding: 14,
+    borderRadius: 20,
+    borderBottomLeftRadius: 6,
+    borderWidth: 1,
+    borderColor: "#e2e8d8",
   },
 
   agentText: {
@@ -460,9 +489,9 @@ const styles = StyleSheet.create({
 
   userBubble: {
     backgroundColor: "#a1e633",
-    padding: 12,
-    borderRadius: 18,
-    borderBottomRightRadius: 4,
+    padding: 14,
+    borderRadius: 20,
+    borderBottomRightRadius: 6,
   },
 
   userText: {
@@ -471,10 +500,13 @@ const styles = StyleSheet.create({
 
   footer: {
     flexDirection: "row",
-    padding: 12,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 14,
     borderTopWidth: 1,
-    borderColor: "#e2e8d8",
+    borderColor: "#dde7d5",
     gap: 8,
+    backgroundColor: "#ffffff",
   },
 
   attach: {
@@ -483,10 +515,12 @@ const styles = StyleSheet.create({
 
   inputWrap: {
     flex: 1,
-    backgroundColor: "#f3f4f6",
+    backgroundColor: "#f8fafc",
     borderRadius: 999,
     paddingLeft: 14,
     paddingRight: 42,
+    borderWidth: 1,
+    borderColor: "#dbe4de",
   },
 
   input: {
@@ -497,6 +531,9 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: 8,
     top: 8,
+  },
+  sendDisabled: {
+    opacity: 0.6,
   },
 
   menuOverlay: {
@@ -519,6 +556,13 @@ const styles = StyleSheet.create({
 
   clearText: {
     color: "#ef4444",
+    fontWeight: "600",
+  },
+  errorText: {
+    color: "#dc2626",
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    backgroundColor: "#ffffff",
     fontWeight: "600",
   },
 });

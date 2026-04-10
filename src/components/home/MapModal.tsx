@@ -93,9 +93,10 @@ const MapModal: FC<Props> = ({
 
       lastCenter.current = { latitude: lat, longitude: lng };
 
+      setAddress("Updating address...");
       const addr = await reverseGeocode(lat, lng);
       setAddress(addr);
-    }, 600);
+    }, 250);
   };
 
   /* =====================================================

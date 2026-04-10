@@ -12,26 +12,50 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, {
   useSharedValue,
   useAnimatedScrollHandler,
-  useAnimatedStyle,
-  interpolate,
 } from "react-native-reanimated";
 import { FlatList } from "react-native";
 import {
-  Bell,
   Broom,
   Wrench,
   LightbulbFilament,
   Clock,
+  CheckCircle,
+  XCircle,
 } from "phosphor-react-native";
 import { useRouter } from "expo-router";
 import { useJobStore } from "@/store/jobStore";
 import { getJobDetails } from "@/service/api";
 
-const { width, height } = Dimensions.get("window");
-const PRIMARY = "#a3e635";
+const { width } = Dimensions.get("window");
+const PRIMARY = "#22c55e";
 const PAGE_SIZE = 6;
 
-/* ---------------- CARD ---------------- */
+const getJobDateTime = (job: any) => {
+  const rawValue =
+    job?.scheduledFor ||
+    job?.scheduled_for ||
+    job?.scheduled_at ||
+    job?.bookingTime ||
+    job?.booking_time ||
+    job?.created_at;
+
+  if (!rawValue) return "Date not available";
+
+  const value = new Date(rawValue);
+  if (Number.isNaN(value.getTime())) return String(rawValue);
+
+  return value
+    .toLocaleString("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    })
+    .replace(",", " �");
+};
+
 const TaskCard = ({
   Icon,
   color,
@@ -43,12 +67,13 @@ const TaskCard = ({
 }: any) => (
   <TouchableOpacity onPress={onPress} style={styles.card}>
     <View style={styles.cardTop}>
-      <View style={[styles.iconBox, { backgroundColor: color + "22" }]}>
+      <View style={[styles.iconBox, { backgroundColor: color + "1A" }]}>
         <Icon size={26} color={color} weight="fill" />
       </View>
 
-      <View style={[styles.badge, { backgroundColor: statusColor + "22" }]}>
-        <Text style={[styles.badgeText, { color: statusColor }]}>{status}</Text>
+      <View style={[styles.statusPill, { borderColor: statusColor }]}>
+        <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+        <Text style={[styles.statusText, { color: statusColor }]}>{status}</Text>
       </View>
     </View>
 
@@ -61,7 +86,6 @@ const TaskCard = ({
   </TouchableOpacity>
 );
 
-/* ---------------- EMPTY STATE ---------------- */
 const EmptyState = ({ title, subtitle, Icon, actionText, onAction }: any) => (
   <View style={styles.emptyContainer}>
     <View style={styles.emptyIconBox}>
@@ -79,27 +103,22 @@ const EmptyState = ({ title, subtitle, Icon, actionText, onAction }: any) => (
   </View>
 );
 
-/* ---------------- SCREEN ---------------- */
 export default function PriorityBoardScreen() {
   const scrollX = useSharedValue(0);
   const scrollRef = useRef<Animated.ScrollView>(null);
   const [active, setActive] = useState(0);
   const { jobs, setJobs, initRealtime } = useJobStore();
-  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   const [pages, setPages] = useState({ 0: 1, 1: 1, 2: 1 });
 
-  /* ---------------- LOAD JOBS ---------------- */
   useEffect(() => {
     const loadInitialJobs = async () => {
       try {
         const res = await getJobDetails();
         setJobs(res?.jobs || []);
-      } catch (e) {
+      } catch {
         setJobs([]);
-      } finally {
-        setLoading(false);
       }
     };
 
@@ -107,11 +126,11 @@ export default function PriorityBoardScreen() {
     initRealtime();
   }, []);
 
-  /* ---------------- FILTER JOBS ---------------- */
   const ongoing = jobs.filter((job) =>
     [
       "IN_PROGRESS",
-      "SEARCHING_FOR_WORKER",
+      "SEARCHING",
+      "SCHEDULED",
       "ARRIVED",
       "AWAITING_APPROVAL",
       "ASSIGNED",
@@ -127,16 +146,13 @@ export default function PriorityBoardScreen() {
     ].includes(job.status),
   );
 
-  const tabData = [ongoing, completed, cancelled];
-
-  /* ---------------- ICON + COLOR ---------------- */
   const getIconAndColor = (type: string) => {
     switch (type) {
       case "cleaner":
-        return { Icon: Broom, color: "#65a30d" };
+        return { Icon: Broom, color: "#16a34a" };
       case "plumber":
       case "carpenter":
-        return { Icon: Wrench, color: "#3b82f6" };
+        return { Icon: Wrench, color: "#2563eb" };
       case "electrician":
         return { Icon: LightbulbFilament, color: "#f97316" };
       default:
@@ -147,11 +163,20 @@ export default function PriorityBoardScreen() {
   const getBatchColor = (status: string) => {
     switch (status) {
       case "IN_PROGRESS":
-        return "#65a30d";
+        return "#16a34a";
       case "ASSIGNED":
-        return "#3b82f6";
+        return "#2563eb";
+      case "SCHEDULED":
+        return "#8b5cf6";
       case "AWAITING_APPROVAL":
         return "#f97316";
+      case "COMPLETED":
+        return "#0f766e";
+      case "CANCELLED":
+      case "REJECTED":
+      case "CANCELLED_BY_WORKER":
+      case "CANCELLED_BY_USER":
+        return "#ef4444";
       default:
         return "#f97316";
     }
@@ -159,39 +184,39 @@ export default function PriorityBoardScreen() {
 
   const handleJobPress = (job: any) => {
     if (!job) return;
-    if (job.status === "AWAITING_APPROVAL") {
+    if (["AWAITING_APPROVAL", "IN_PROGRESS"].includes(job.status)) {
       router.push({
         pathname: "/(app)/(screens)/waiting",
         params: { id: job.id },
       });
     } else if (
       job.status === "ASSIGNED" ||
-      job.status === "SEARCHING_FOR_WORKER" ||
-      job.status === "ARRIVED"
+      job.status === "SEARCHING" ||
+      job.status === "ARRIVED" ||
+      job.status === "SCHEDULED"
     ) {
       router.push({
         pathname: "/(app)/(screens)/live-job",
         params: { id: job.id },
       });
-    } else {
-      return;
+    } else if (job.worker_id) {
+      router.push({
+        pathname: "/(app)/(screens)/worker-profile",
+        params: {
+          workerId: job.worker_id,
+          workerName: job.worker_name,
+          workerPhone: job.worker_phone,
+          workerType: job.type,
+          jobId: job.id,
+        },
+      });
     }
   };
 
-  /* ---------------- TAB ANIMATION ---------------- */
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
       scrollX.value = event.contentOffset.x;
     },
-  });
-
-  const underlineStyle = useAnimatedStyle(() => {
-    const translateX = interpolate(
-      scrollX.value,
-      [0, width, width * 2],
-      [0, width / 3, (width / 3) * 2],
-    );
-    return { transform: [{ translateX }] };
   });
 
   const goToTab = (index: number) => {
@@ -199,14 +224,16 @@ export default function PriorityBoardScreen() {
     scrollRef.current?.scrollTo({ x: width * index, animated: true });
   };
 
-  /* ---------------- RENDER LIST ---------------- */
   const renderList = (data: any[], label: string, tabIndex: number) => {
     if (data.length === 0) {
+      const EmptyIcon =
+        tabIndex === 0 ? Clock : tabIndex === 1 ? CheckCircle : XCircle;
+
       return (
         <EmptyState
-          Icon={Broom}
+          Icon={EmptyIcon}
           title={`No ${label} Tasks`}
-          subtitle={`You don’t have any ${label.toLowerCase()} bookings right now.`}
+          subtitle={`You do not have any ${label.toLowerCase()} bookings right now.`}
           actionText={tabIndex === 0 ? "Book a Service" : undefined}
           onAction={() => router.push("/")}
         />
@@ -222,12 +249,7 @@ export default function PriorityBoardScreen() {
       <FlatList
         data={visibleData}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingHorizontal: 20,
-          paddingTop: 20,
-          paddingBottom: 120,
-        }}
+        contentContainerStyle={styles.listContent}
         onEndReached={() => {
           if (visibleData.length < data.length) {
             setPages((prev) => ({
@@ -254,16 +276,7 @@ export default function PriorityBoardScreen() {
         renderItem={({ item }) => {
           const { Icon, color } = getIconAndColor(item.type);
           const statusColor = getBatchColor(item.status);
-          const formattedDateTime = new Date(item.created_at)
-            .toLocaleString("en-GB", {
-              day: "numeric",
-              month: "long",
-              year: "numeric",
-              hour: "numeric",
-              minute: "2-digit",
-              hour12: true,
-            })
-            .replace(",", " ·");
+          const formattedDateTime = getJobDateTime(item);
 
           return (
             <TaskCard
@@ -290,22 +303,36 @@ export default function PriorityBoardScreen() {
     );
   };
 
-  /* ---------------- UI ---------------- */
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Bookings</Text>
+        <View>
+          <Text style={styles.headerTitle}>My Bookings</Text>
+          <Text style={styles.headerSubtitle}>Track and manage your tasks.</Text>
+        </View>
       </View>
 
-      <View style={styles.tabs}>
-        {["Ongoing", "Completed", "Canceled"].map((t, i) => (
-          <Pressable key={i} style={styles.tab} onPress={() => goToTab(i)}>
-            <Text style={[styles.tabText, active === i && styles.activeText]}>
-              {t}
-            </Text>
-          </Pressable>
-        ))}
-        <Animated.View style={[styles.underline, underlineStyle]} />
+      <View style={styles.tabsWrap}>
+        <View style={styles.tabs}>
+          {[
+            { label: "Ongoing", count: ongoing.length },
+            { label: "Completed", count: completed.length },
+            { label: "Canceled", count: cancelled.length },
+          ].map((t, i) => (
+            <Pressable
+              key={t.label}
+              style={[styles.tabButton, active === i && styles.tabButtonActive]}
+              onPress={() => goToTab(i)}
+            >
+              <Text
+                style={[styles.tabText, active === i && styles.tabTextActive]}
+              >
+                {t.label}
+              </Text>
+              <Text style={styles.tabCount}>{t.count}</Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
 
       <Animated.ScrollView
@@ -335,48 +362,108 @@ export default function PriorityBoardScreen() {
   );
 }
 
-/* ---------------- STYLES ---------------- */
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f8fafc" },
-
+  container: { flex: 1, backgroundColor: "#f5f7fb" },
   header: {
     paddingHorizontal: 24,
-    paddingVertical: 20,
+    paddingTop: 18,
+    paddingBottom: 12,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  headerTitle: { fontSize: 26, fontWeight: "700" },
-
+  headerTitle: { fontSize: 26, fontWeight: "800", color: "#0f172a" },
+  headerSubtitle: { marginTop: 4, color: "#64748b", fontSize: 12 },
+  countPill: {
+    backgroundColor: "#0f172a",
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignItems: "center",
+  },
+  countValue: { color: "#f8fafc", fontWeight: "800", fontSize: 14 },
+  countLabel: { color: "#cbd5f5", fontSize: 10 },
+  tabsWrap: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
   tabs: {
     flexDirection: "row",
-    position: "relative",
-    borderBottomWidth: 1,
+    backgroundColor: "#e2e8f0",
+    borderRadius: 18,
+    padding: 4,
+  },
+  tabButton: {
+    flex: 1,
+    borderRadius: 14,
+    alignItems: "center",
+    paddingVertical: 10,
+    gap: 4,
+  },
+  tabButtonActive: {
+    backgroundColor: "#ffffff",
+  },
+  tabText: { fontWeight: "700", color: "#64748b", fontSize: 12 },
+  tabTextActive: { color: "#0f172a" },
+  tabCount: { fontSize: 10, color: "#94a3b8" },
+  listContent: {
+    flexGrow: 1,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 120,
+    gap: 14,
+  },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 24,
+    padding: 16,
+    borderWidth: 1,
     borderColor: "#e2e8f0",
+    shadowColor: "#0f172a",
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
   },
-  tab: { flex: 1, alignItems: "center", paddingVertical: 14 },
-  tabText: { fontWeight: "600", color: "#94a3b8" },
-  activeText: { color: "#0f172a", fontWeight: "700" },
-  underline: {
-    position: "absolute",
-    bottom: 0,
-    width: width / 3,
-    height: 3,
-    backgroundColor: PRIMARY,
+  cardTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
   },
-
+  iconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  statusText: { fontSize: 10, fontWeight: "800" },
+  title: { fontSize: 18, fontWeight: "800", color: "#0f172a" },
+  row: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 },
+  meta: { color: "#64748b", fontSize: 12 },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 40,
-    paddingTop: 100,
+    paddingTop: 80,
   },
   emptyIconBox: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: "#f1f5f9",
+    backgroundColor: "#e2e8f0",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 20,
@@ -394,56 +481,20 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   emptyButton: {
-    backgroundColor: "black",
+    backgroundColor: "#0f172a",
     paddingVertical: 12,
     paddingHorizontal: 24,
-    borderRadius:10,
+    borderRadius: 12,
   },
   emptyButtonText: { fontWeight: "700", color: "white" },
-
-  pageContent: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 120 },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 28,
-    padding: 10,
-    borderWidth: 3,
-    borderColor: "#f1f5f9",
-    marginBottom: 18,
-  },
-  cardTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 5,
-  },
-  iconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  badge: {
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    height: 26,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  badgeText: { fontSize: 10, fontWeight: "700", textTransform: "uppercase" },
-  title: { fontSize: 18, fontWeight: "700", marginBottom: 6, marginLeft: 5 },
-  row: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
-  meta: { color: "#64748b", fontSize: 13 },
   cancelInfoBox: {
-    marginHorizontal: 20,
-    marginLeft: 5,
-    marginTop: 15,
-    marginBottom: 10,
-    backgroundColor: "#fef3c7",
-    paddingVertical: 10,
+    marginTop: 12,
+    backgroundColor: "#fff7ed",
+    paddingVertical: 12,
     paddingHorizontal: 14,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#fde68a",
+    borderColor: "#fed7aa",
   },
-  cancelInfoText: { fontSize: 13, color: "#92400e", fontWeight: "500" },
+  cancelInfoText: { fontSize: 12, color: "#c2410c", fontWeight: "600" },
 });

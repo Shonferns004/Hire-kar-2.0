@@ -1,311 +1,216 @@
-import React, { useEffect } from "react";
+import React from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
+  Pressable,
   ScrollView,
-  Image,
-  TouchableOpacity,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-import {
-  User,
-  GraduationCap,
-  Gear,
-  ChatCircleDots,
-  EnvelopeSimple,
-  BookOpen,
-  SignOut,
-  House,
-  SquaresFour,
-  ClipboardText,
-  Plus,
-  PencilSimple,
-  CheckCircle,
-} from "phosphor-react-native";
-import { getUserId, supabase } from "@/config/supabase";
+import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { supabase } from "@/config/supabase";
+import { useUserStore } from "@/store/userStore";
 
 export default function Profile() {
-  const userId = getUserId();
   const router = useRouter();
+  const { user } = useUserStore();
 
-  useEffect(() => {
-    const getname = async () => {
-      const { data, error } = await supabase.auth.getSession();
-      console.log(data?.session);
-    };
-    getname();
-  }, []);
+  const signOut = async () => {
+    await supabase.auth.signOut();
+  };
+
+  const cards = [
+    {
+      icon: "favorite-border" as const,
+      title: "Favorite Workers",
+      subtitle: "Open the workers you have saved for later.",
+      onPress: () => router.push("/(app)/(screens)/favorites"),
+    },
+    {
+      icon: "book-online" as const,
+      title: "My Bookings",
+      subtitle: "Track active, completed, and cancelled bookings.",
+      onPress: () => router.push("/(app)/(tabs)/jobs"),
+    },
+    {
+      icon: "support-agent" as const,
+      title: "Support Chat",
+      subtitle: "Reach us quickly if you need help with a booking.",
+      onPress: () => router.push("/(app)/(screens)/chat"),
+    },
+  ];
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.wrapper}>
-        {/* HEADER */}
-        <View style={styles.header}>
-          <View style={{ alignItems: "center" }}>
-            <View style={styles.avatarWrapper}>
-              <Image
-                source={{
-                  uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuBcQYo77BJRBjjPA1_J-ZhqTxhCPNeAL1zZ3UxdJ3bQ6J596D4p9gAK5GVOUlmYmU5E3po10-G_5wo8ZBrMIZsanYmIJGC8-ovELeyQs_9djooONwNkeiXv5awEfTOUOzMzV8M7bKX_u_jO0NUZPsXtZZKiwj0_Q13lK5qLhwb3EL8RAtB2KvO6Q_i8Wb7eRWKOH4s-0TMXjo2WoCDQY9pUT5dzgLibXq4U1FN0mBngz5K7CgbAg-AwMK2afkVjk6BsK2HO-iD_sxE",
-                }}
-                style={styles.avatar}
-              />
-
-              <TouchableOpacity style={styles.editBadge}>
-                <PencilSimple size={14} weight="bold" color="#161b0e" />
-              </TouchableOpacity>
+    <SafeAreaView style={styles.safe}>
+      <ScrollView contentContainerStyle={styles.container}>
+        <View style={styles.hero}>
+          <View style={styles.heroTop}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {(user?.phone ?? "H").slice(-1).toUpperCase()}
+              </Text>
             </View>
+            <View style={styles.heroBadge}>
+              <Text style={styles.heroBadgeText}>HireKar Member</Text>
+            </View>
+          </View>
 
-            <Text style={styles.name}>{}</Text>
+          <Text style={styles.name}>{user?.phone ?? "Hire User"}</Text>
+          <Text style={styles.subtitle}>
+            Manage saved workers, bookings, and support in one place.
+          </Text>
 
-            <View style={styles.proBadge}>
-              <CheckCircle size={14} weight="fill" color="#a1e633" />
-              <Text style={styles.proText}>PRO MEMBER</Text>
+          <View style={styles.quickRow}>
+            <View style={styles.quickCard}>
+              <Text style={styles.quickValue}>24x7</Text>
+              <Text style={styles.quickLabel}>Support</Text>
+            </View>
+            <View style={styles.quickCard}>
+              <Text style={styles.quickValue}>Safe</Text>
+              <Text style={styles.quickLabel}>Payments</Text>
+            </View>
+            <View style={styles.quickCard}>
+              <Text style={styles.quickValue}>Verified</Text>
+              <Text style={styles.quickLabel}>Pros</Text>
             </View>
           </View>
         </View>
 
-        {/* BODY */}
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 160 }}
-        >
-          {/* ACCOUNT */}
-          <Section title="Account">
-            <Row icon={<User size={22} />} label="Personal Information" />
-            <Row icon={<Gear size={22} />} label="Account Settings" />
-          </Section>
+        <View style={styles.cards}>
+          {cards.map((card) => (
+            <Pressable key={card.title} style={styles.card} onPress={card.onPress}>
+              <View style={styles.cardIcon}>
+                <MaterialIcons name={card.icon} size={24} color="#0f172a" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>{card.title}</Text>
+                <Text style={styles.cardSubtitle}>{card.subtitle}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={22} color="#94a3b8" />
+            </Pressable>
+          ))}
+        </View>
 
-          {/* HELP */}
-          <Section title="Get Help">
-            <HelpRow
-            onPress={() => router.push("/(app)/(screens)/chat")}
-              icon={<ChatCircleDots size={26} color="#a1e633" />}
-              title="Chat with us"
-              desc="Speak with our support team"
-              online
-            />
-            <HelpRow
-              icon={<EnvelopeSimple size={26} color="#a1e633" />}
-              title="Email Support"
-              desc="Response time: ~2 hours"
-            />
-          </Section>
-
-          {/* LOGOUT */}
-          <TouchableOpacity style={styles.logoutBtn}>
-            <SignOut size={18} color="#ef4444" />
-            <Text style={styles.logoutText}>LOGOUT ACCOUNT</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
+        <Pressable style={styles.logoutButton} onPress={signOut}>
+          <MaterialIcons name="logout" size={18} color="#dc2626" />
+          <Text style={styles.logoutText}>Logout</Text>
+        </Pressable>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-/* ---------- COMPONENTS ---------- */
-
-const Section = ({ title, children }: any) => (
-  <View style={{ paddingHorizontal: 24, marginTop: 26 }}>
-    <Text style={styles.sectionTitle}>{title}</Text>
-    <View style={{ gap: 12 }}>{children}</View>
-  </View>
-);
-
-const Row = ({ icon, label }: any) => (
-  <TouchableOpacity style={styles.row}>
-    <View style={styles.rowLeft}>
-      <View style={styles.rowIcon}>{icon}</View>
-      <Text style={styles.rowText}>{label}</Text>
-    </View>
-    <Text style={styles.chevron}>›</Text>
-  </TouchableOpacity>
-);
-
-const HelpRow = ({ icon, title, desc, online,onPress }: any) => (
-  <TouchableOpacity style={styles.helpRow} onPress={onPress}>
-    <View style={styles.helpIcon}>{icon}</View>
-    <View style={{ flex: 1 }}>
-      <View style={{ flexDirection: "row", alignItems: "center" }}>
-        <Text style={styles.helpTitle}>{title}</Text>
-        {online && <View style={styles.onlineDot} />}
-      </View>
-      <Text style={styles.helpDesc}>{desc}</Text>
-    </View>
-    <Text style={styles.chevron}>›</Text>
-  </TouchableOpacity>
-);
-
-const NavItem = ({ icon, label, active }: any) => (
-  <View style={{ alignItems: "center" }}>
-    {icon}
-    <Text style={[styles.navText, active && { color: "#a1e633" }]}>
-      {label}
-    </Text>
-  </View>
-);
-
-/* ---------- STYLES ---------- */
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fcfdfa" },
-  wrapper: { flex: 1, alignSelf: "center", width: "100%" },
-
-  header: {
-    paddingTop: 40,
-    paddingBottom: 28,
-    borderBottomWidth: 1,
-    borderColor: "#e2e8d8",
-    backgroundColor: "#fff",
+  safe: {
+    flex: 1,
+    backgroundColor: "#f5f7fb",
   },
-
-  avatarWrapper: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 4,
-    borderColor: "#a1e633",
-    padding: 4,
-    marginBottom: 12,
+  container: {
+    padding: 20,
+    gap: 18,
   },
-  avatar: { width: "100%", height: "100%", borderRadius: 48 },
-
-  editBadge: {
-    position: "absolute",
-    right: -4,
-    bottom: -4,
-    backgroundColor: "#a1e633",
-    padding: 6,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: "#fff",
+  hero: {
+    backgroundColor: "#0f172a",
+    borderRadius: 28,
+    padding: 22,
   },
-
-  name: { fontSize: 24, fontWeight: "900", marginBottom: 6 },
-
-  proBadge: {
-    flexDirection: "row",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    backgroundColor: "rgba(161,230,51,0.15)",
-    borderRadius: 999,
-    alignItems: "center",
-    gap: 6,
-  },
-  proText: { fontSize: 11, fontWeight: "900" },
-
-  sectionTitle: {
-    fontSize: 12,
-    letterSpacing: 2,
-    fontWeight: "900",
-    opacity: 0.4,
-    marginBottom: 14,
-  },
-
-  row: {
-    padding: 16,
-    borderRadius: 18,
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#e2e8d8",
+  heroTop: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  rowLeft: { flexDirection: "row", alignItems: "center", gap: 14 },
-  rowIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "#f3f4f6",
+  avatar: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: "#a3e635",
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: 10,
   },
-  rowText: { fontWeight: "700", fontSize: 14 },
-  chevron: { fontSize: 20, opacity: 0.3 },
-
-  helpRow: {
-    padding: 16,
-    borderRadius: 18,
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#e2e8d8",
+  avatarText: {
+    fontSize: 30,
+    fontWeight: "900",
+    color: "#0f172a",
+  },
+  heroBadge: {
+    backgroundColor: "#1e293b",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  heroBadgeText: { color: "#cbd5f5", fontSize: 10, fontWeight: "700" },
+  name: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: "#f8fafc",
+    marginTop: 4,
+  },
+  subtitle: {
+    marginTop: 8,
+    color: "#cbd5f5",
+    lineHeight: 20,
+  },
+  quickRow: {
+    marginTop: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  quickCard: {
+    flex: 1,
+    backgroundColor: "#111827",
+    borderRadius: 16,
+    padding: 12,
+    marginRight: 10,
+  },
+  quickValue: { color: "#f8fafc", fontWeight: "800", fontSize: 12 },
+  quickLabel: { marginTop: 4, color: "#94a3b8", fontSize: 10 },
+  cards: {
+    gap: 14,
+  },
+  card: {
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
+    backgroundColor: "#ffffff",
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    padding: 18,
   },
-  helpIcon: {
+  cardIcon: {
     width: 48,
     height: 48,
-    backgroundColor: "rgba(161,230,51,0.15)",
-    borderRadius: 12,
+    borderRadius: 16,
+    backgroundColor: "#e2e8f0",
     alignItems: "center",
     justifyContent: "center",
   },
-  helpTitle: { fontWeight: "700", fontSize: 14 },
-  helpDesc: { fontSize: 11, opacity: 0.5 },
-  onlineDot: {
-    width: 6,
-    height: 6,
-    backgroundColor: "#22c55e",
-    borderRadius: 3,
-    marginLeft: 6,
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0f172a",
   },
-
-  logoutBtn: {
-    marginTop: 26,
-    marginHorizontal: 24,
-    paddingVertical: 16,
+  cardSubtitle: {
+    marginTop: 4,
+    color: "#64748b",
+    lineHeight: 18,
+  },
+  logoutButton: {
+    marginTop: 4,
+    backgroundColor: "#ffffff",
     borderRadius: 18,
     borderWidth: 1,
     borderColor: "#fecaca",
-    backgroundColor: "#fef2f2",
-    flexDirection: "row",
-    justifyContent: "center",
+    paddingVertical: 16,
     alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
     gap: 8,
   },
   logoutText: {
-    color: "#ef4444",
-    fontWeight: "900",
-    fontSize: 12,
-    letterSpacing: 1,
-  },
-
-  bottomBar: {
-    position: "absolute",
-    bottom: 0,
-    width: "100%",
-    height: 92,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    paddingHorizontal: 32,
-    paddingTop: 14,
-    paddingBottom: 26,
-    backgroundColor: "rgba(255,255,255,0.94)",
-    borderTopWidth: 1,
-    borderColor: "#e2e8d8",
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: -4 },
-    elevation: 20,
-  },
-
-  navText: { fontSize: 9, fontWeight: "700", marginTop: 4, opacity: 0.5 },
-
-  fabWrapper: { marginTop: -38 },
-  fab: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "#a1e633",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 4,
-    borderColor: "#fff",
+    color: "#dc2626",
+    fontWeight: "800",
   },
 });
