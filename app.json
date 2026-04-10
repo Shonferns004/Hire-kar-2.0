@@ -21,7 +21,6 @@
         "backgroundImage": "./src/assets/images/icon.png",
         "monochromeImage": "./src/assets/images/icon.png"
       },
-      
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.shawnferns2003.hirekar",
@@ -76,7 +75,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "5bf935cc-ccf5-4979-9aa8-3b310ab2b4ed"
+        "projectId": "7f61f4db-a48d-4986-86b6-d776ff0c339f"
       }
     }
   }

@@ -7,8 +7,12 @@ import {
   UserCircleDashedIcon,
   HouseLineIcon,
   BookIcon,
+  GooglePodcastsLogoIcon,
+  NotepadIcon,
+  ApplePodcastsLogoIcon 
 } from "phosphor-react-native";
 import { useJobStore } from "@/store/jobStore";
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 
 const { height: screenHeight } = Dimensions.get("window");
@@ -37,7 +41,7 @@ export default function TabLayout() {
 
   // CRITICAL → clamp or large phones become ridiculous
   const TAB_HEIGHT = useMemo(() => {
-    const min = 48;
+    const min = 54;
     const max = 58;
 
     const clamped = Math.min(Math.max(baseTabHeight, min), max);
@@ -53,7 +57,7 @@ export default function TabLayout() {
 
   const ICON_SIZE = useMemo(() => {
     const usableHeight = TAB_HEIGHT - insets.bottom;
-    const size = usableHeight * 0.4;
+    const size = usableHeight * 0.6 ;
     return Math.min(Math.max(size, 21), 26);
   }, [TAB_HEIGHT, insets.bottom]);
 
@@ -92,9 +96,11 @@ export default function TabLayout() {
         options={{
           tabBarIcon: ({ color, focused }) =>
             focused ? (
-              <HouseLineIcon weight="fill" size={ICON_SIZE} color={color} />
+              <ApplePodcastsLogoIcon weight="duotone"
+                  size={ICON_SIZE}
+                  color={color} />
             ) : (
-              <HouseLineIcon size={ICON_SIZE} color={color} />
+              <ApplePodcastsLogoIcon size={ICON_SIZE} color={color} />
             ),
         }}
       />
@@ -106,13 +112,13 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <View style={{ position: "relative" }}>
               {focused ? (
-                <BookOpenTextIcon
-                  weight="fill"
+                <NotepadIcon
+                  weight="duotone"
                   size={ICON_SIZE}
                   color={color}
                 />
               ) : (
-                <BookIcon size={ICON_SIZE} color={color} />
+                <NotepadIcon size={ICON_SIZE} color={color} />
               )}
 
               {hasOngoingBooking && <View style={styles.badge} />}
@@ -128,7 +134,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) =>
             focused ? (
               <UserCircleDashedIcon
-                weight="fill"
+                weight="duotone"
                 size={ICON_SIZE}
                 color={color}
               />

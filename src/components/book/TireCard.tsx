@@ -39,23 +39,17 @@ const TierCard = ({
       onPress={() => onSelect(id)}
       style={[styles.card, active && styles.cardActive]}
     >
-      {/* Icon */}
       <View style={styles.iconBox}>
         <MaterialIcons name={icon} size={22} color={PRIMARY} />
       </View>
 
-      {/* Text */}
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.subtitle}>{subtitle}</Text>
 
-      {/* Price */}
-      {/* PRICE BLOCK */}
       <View style={styles.priceBlock}>
-        <Text style={styles.jobCharge}>₹{jobCharge}</Text>
-        <Text style={styles.visitFee}>₹{visitFee} visit fee</Text>
-        <Text style={styles.range}>
-          Est. ₹{min} – ₹{max}
-        </Text>
+        <Text style={styles.jobCharge}>{`Rs ${jobCharge}`}</Text>
+        <Text style={styles.visitFee}>{`Rs ${visitFee} visit fee`}</Text>
+        <Text style={styles.range}>{`Est. Rs ${min} - Rs ${max}`}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -72,7 +66,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#f1f5f9",
     backgroundColor: "#f8fafc",
-    minHeight: 210, // stabilizes all cards
+    minHeight: 210,
     justifyContent: "flex-start",
   },
 
@@ -104,10 +98,8 @@ const styles = StyleSheet.create({
     minHeight: 34,
   },
 
-  /* ---- PRICE SECTION ---- */
-
   priceBlock: {
-    marginTop: "auto", // pushes pricing to bottom of card
+    marginTop: "auto",
   },
 
   jobCharge: {
