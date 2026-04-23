@@ -307,9 +307,13 @@ export default function ConfirmBookingScreen() {
         pathname: "/live-job",
         params: { id: res.job.id },
       });
-    } catch (e) {
+    } catch (e: any) {
       console.log("BOOKING ERROR:", e);
-      alert("Booking failed. Please try again.");
+      const message =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        "Booking failed. Please try again.";
+      alert(message);
     } finally {
       setLoading(false);
     }
